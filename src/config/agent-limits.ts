@@ -5,6 +5,7 @@ export const DEFAULT_SUBAGENT_MAX_CONCURRENT = 8;
 // Keep depth-1 subagents as leaves unless config explicitly opts into nesting.
 export const DEFAULT_SUBAGENT_MAX_SPAWN_DEPTH = 1;
 export const DEFAULT_AGENT_MAX_CONCURRENT_PER_CONVERSATION = 1;
+export const DEFAULT_CONVERSATION_LANE_DRAIN_DELAY_MS = 0;
 
 export function resolveAgentMaxConcurrent(cfg?: OpenClawConfig): number {
   const raw = cfg?.agents?.defaults?.maxConcurrent;
@@ -52,6 +53,14 @@ function asPositiveInt(value: unknown): number | undefined {
     return undefined;
   }
   return Math.min(MAX_CONCURRENT_PER_CONVERSATION, Math.floor(value));
+}
+
+/** Return value as a non-negative integer, or undefined if invalid/missing. */
+function asNonNegativeInt(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+  return Math.floor(value);
 }
 
 /**
@@ -118,4 +127,78 @@ export function resolveMaxConcurrentPerConversation(params: {
     | { maxConcurrentPerConversation?: number }
     | undefined;
   return asPositiveInt(providerConfig?.maxConcurrentPerConversation) ?? globalDefault;
+}
+
+// ---------------------------------------------------------------------------
+// Per-channel conversation lane drain delay override
+// ---------------------------------------------------------------------------
+
+function resolveAgentConversationLaneDrainDelay(cfg?: OpenClawConfig): number {
+  const raw = cfg?.agents?.defaults?.conversationLaneDrainDelayMs;
+  if (typeof raw === "number" && Number.isFinite(raw) && raw >= 0) {
+    return Math.floor(raw);
+  }
+  return DEFAULT_CONVERSATION_LANE_DRAIN_DELAY_MS;
+}
+
+/**
+ * Resolve `conversationLaneDrainDelayMs` using the established channel config cascade:
+ *
+ *   Discord:  channel → guild → provider → global
+ *   Telegram: group → provider → global
+ *   Slack:    channel → provider → global
+ *   Others:   provider → global
+ */
+export function resolveConversationLaneDrainDelay(params: {
+  cfg?: OpenClawConfig;
+  channel?: string;
+  groupSpace?: string | null;
+  peerId?: string;
+}): number {
+  const globalDefault = resolveAgentConversationLaneDrainDelay(params.cfg);
+  const channelKey = params.channel?.toLowerCase();
+  if (!channelKey) {
+    return globalDefault;
+  }
+
+  if (channelKey === "discord") {
+    const config = params.cfg?.channels?.discord;
+    const guild = params.groupSpace ? config?.guilds?.[params.groupSpace] : undefined;
+    const channelId = stripPeerPrefix(params.peerId);
+    const channel = channelId ? guild?.channels?.[channelId] : undefined;
+    return (
+      asNonNegativeInt(channel?.conversationLaneDrainDelayMs) ??
+      asNonNegativeInt(guild?.conversationLaneDrainDelayMs) ??
+      asNonNegativeInt(config?.conversationLaneDrainDelayMs) ??
+      globalDefault
+    );
+  }
+
+  if (channelKey === "telegram") {
+    const config = params.cfg?.channels?.telegram;
+    const groupId = stripPeerPrefix(params.groupSpace ?? params.peerId);
+    const group = groupId ? config?.groups?.[groupId] : undefined;
+    return (
+      asNonNegativeInt(group?.conversationLaneDrainDelayMs) ??
+      asNonNegativeInt(config?.conversationLaneDrainDelayMs) ??
+      globalDefault
+    );
+  }
+
+  if (channelKey === "slack") {
+    const config = params.cfg?.channels?.slack;
+    const channelId = stripPeerPrefix(params.peerId);
+    const channel = channelId ? config?.channels?.[channelId] : undefined;
+    return (
+      asNonNegativeInt(channel?.conversationLaneDrainDelayMs) ??
+      asNonNegativeInt(config?.conversationLaneDrainDelayMs) ??
+      globalDefault
+    );
+  }
+
+  // Flat providers: provider-level only via dynamic key
+  const providerConfig = params.cfg?.channels?.[channelKey] as
+    | { conversationLaneDrainDelayMs?: number }
+    | undefined;
+  return asNonNegativeInt(providerConfig?.conversationLaneDrainDelayMs) ?? globalDefault;
 }

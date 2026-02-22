@@ -31,6 +31,8 @@ type LaneState = {
   queue: QueueEntry[];
   activeTaskIds: Set<number>;
   maxConcurrent: number;
+  drainDelayMs: number;
+  pendingDrainTimer?: ReturnType<typeof setTimeout>;
   draining: boolean;
   generation: number;
 };
@@ -48,6 +50,7 @@ function getLaneState(lane: string): LaneState {
     queue: [],
     activeTaskIds: new Set(),
     maxConcurrent: 1,
+    drainDelayMs: 0,
     draining: false,
     generation: 0,
   };
@@ -81,6 +84,20 @@ function drainLane(lane: string) {
   }
   state.draining = true;
 
+  const schedulePump = () => {
+    if (state.drainDelayMs > 0 && state.queue.length > 0) {
+      if (state.pendingDrainTimer) {
+        clearTimeout(state.pendingDrainTimer);
+      }
+      state.pendingDrainTimer = setTimeout(() => {
+        state.pendingDrainTimer = undefined;
+        pump();
+      }, state.drainDelayMs);
+    } else {
+      pump();
+    }
+  };
+
   const pump = () => {
     while (state.activeTaskIds.size < state.maxConcurrent && state.queue.length > 0) {
       const entry = state.queue.shift() as QueueEntry;
@@ -105,7 +122,7 @@ function drainLane(lane: string) {
               `lane task done: lane=${lane} durationMs=${Date.now() - startTime} active=${state.activeTaskIds.size} queued=${state.queue.length}`,
             );
             evictIdleLane(lane, state);
-            pump();
+            schedulePump();
           }
           entry.resolve(result);
         } catch (err) {
@@ -118,7 +135,7 @@ function drainLane(lane: string) {
           }
           if (completedCurrentGeneration) {
             evictIdleLane(lane, state);
-            pump();
+            schedulePump();
           }
           entry.reject(err);
         }
@@ -139,6 +156,21 @@ export function setCommandLaneConcurrency(lane: string, maxConcurrent: number) {
     return;
   }
   state.maxConcurrent = resolved;
+  drainLane(cleaned);
+}
+
+export function setCommandLaneDrainDelay(lane: string, delayMs: number) {
+  const cleaned = lane.trim() || CommandLane.Main;
+  const resolved = Math.max(0, Math.floor(delayMs));
+  const state = getLaneState(cleaned);
+  if (state.drainDelayMs === resolved) {
+    return;
+  }
+  state.drainDelayMs = resolved;
+  if (state.pendingDrainTimer) {
+    clearTimeout(state.pendingDrainTimer);
+    state.pendingDrainTimer = undefined;
+  }
   drainLane(cleaned);
 }
 
@@ -200,6 +232,10 @@ export function clearCommandLane(lane: string = CommandLane.Main) {
   if (!state) {
     return 0;
   }
+  if (state.pendingDrainTimer) {
+    clearTimeout(state.pendingDrainTimer);
+    state.pendingDrainTimer = undefined;
+  }
   const removed = state.queue.length;
   const pending = state.queue.splice(0);
   for (const entry of pending) {
@@ -228,6 +264,10 @@ export function resetAllLanes(): void {
     state.generation += 1;
     state.activeTaskIds.clear();
     state.draining = false;
+    if (state.pendingDrainTimer) {
+      clearTimeout(state.pendingDrainTimer);
+      state.pendingDrainTimer = undefined;
+    }
     if (state.queue.length > 0) {
       lanesToDrain.push(state.lane);
     }

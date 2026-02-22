@@ -10,7 +10,10 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { resolveHeartbeatPrompt } from "../../auto-reply/heartbeat.js";
 import type { ReasoningLevel, ThinkLevel } from "../../auto-reply/thinking.js";
-import { resolveMaxConcurrentPerConversation } from "../../config/agent-limits.js";
+import {
+  resolveConversationLaneDrainDelay,
+  resolveMaxConcurrentPerConversation,
+} from "../../config/agent-limits.js";
 import { resolveChannelCapabilities } from "../../config/channel-capabilities.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { getMachineDisplayName } from "../../infra/machine-name.js";
@@ -20,6 +23,7 @@ import {
   type enqueueCommand,
   enqueueCommandInLane,
   setCommandLaneConcurrency,
+  setCommandLaneDrainDelay,
 } from "../../process/command-queue.js";
 import { isCronSessionKey, isSubagentSessionKey } from "../../routing/session-key.js";
 import { resolveSignalReactionLevel } from "../../signal/reaction-level.js";
@@ -773,6 +777,15 @@ export async function compactEmbeddedPiSession(
     setCommandLaneConcurrency(
       convLane,
       resolveMaxConcurrentPerConversation({
+        cfg: params.config,
+        channel: params.messageChannel ?? convParts.channel,
+        groupSpace: params.groupSpace,
+        peerId: convParts.peerId,
+      }),
+    );
+    setCommandLaneDrainDelay(
+      convLane,
+      resolveConversationLaneDrainDelay({
         cfg: params.config,
         channel: params.messageChannel ?? convParts.channel,
         groupSpace: params.groupSpace,

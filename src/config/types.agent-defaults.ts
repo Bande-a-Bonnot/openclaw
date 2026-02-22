@@ -235,6 +235,8 @@ export type AgentDefaultsConfig = {
   maxConcurrent?: number;
   /** Max concurrent agent runs within the same conversation. Default: 1 (sequential). */
   maxConcurrentPerConversation?: number;
+  /** Delay (ms) between consecutive task starts in a conversation lane after a task completes. Gives time for delivery round-trip. Default: 0 (off). */
+  conversationLaneDrainDelayMs?: number;
   /** Sub-agent defaults (spawned via sessions_spawn). */
   subagents?: {
     /** Max concurrent sub-agent runs (global lane: "subagent"). Default: 1. */

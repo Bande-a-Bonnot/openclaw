@@ -33,6 +33,8 @@ export type DiscordGuildChannelConfig = {
   requireMention?: boolean;
   /** Per-channel max concurrent conversation runs (1–10). */
   maxConcurrentPerConversation?: number;
+  /** Delay (ms) between consecutive task starts in this channel's conversation lane. */
+  conversationLaneDrainDelayMs?: number;
   /** Optional tool policy overrides for this channel. */
   tools?: GroupToolPolicyConfig;
   toolsBySender?: GroupToolPolicyBySenderConfig;
@@ -57,6 +59,8 @@ export type DiscordGuildEntry = {
   requireMention?: boolean;
   /** Per-guild max concurrent conversation runs (1–10). */
   maxConcurrentPerConversation?: number;
+  /** Delay (ms) between consecutive task starts in this guild's conversation lanes. */
+  conversationLaneDrainDelayMs?: number;
   /** Optional tool policy overrides for this guild (used when channel override is missing). */
   tools?: GroupToolPolicyConfig;
   toolsBySender?: GroupToolPolicyBySenderConfig;
@@ -234,6 +238,8 @@ export type DiscordAccountConfig = {
   maxLinesPerMessage?: number;
   mediaMaxMb?: number;
   historyLimit?: number;
+  /** Delay (ms) between consecutive task starts in conversation lanes (overrides global default). */
+  conversationLaneDrainDelayMs?: number;
   /** Max DM turns to keep as history context. */
   dmHistoryLimit?: number;
   /** Per-DM config overrides keyed by user ID. */

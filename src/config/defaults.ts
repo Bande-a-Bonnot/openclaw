@@ -3,6 +3,7 @@ import { normalizeProviderId, parseModelRef } from "../agents/model-selection.js
 import {
   DEFAULT_AGENT_MAX_CONCURRENT,
   DEFAULT_AGENT_MAX_CONCURRENT_PER_CONVERSATION,
+  DEFAULT_CONVERSATION_LANE_DRAIN_DELAY_MS,
   DEFAULT_SUBAGENT_MAX_CONCURRENT,
 } from "./agent-limits.js";
 import { resolveAgentModelPrimaryValue } from "./model-input.js";
@@ -328,10 +329,13 @@ export function applyAgentDefaults(cfg: OpenClawConfig): OpenClawConfig {
   const hasConvMax =
     typeof defaults?.maxConcurrentPerConversation === "number" &&
     Number.isFinite(defaults.maxConcurrentPerConversation);
+  const hasDrainDelay =
+    typeof defaults?.conversationLaneDrainDelayMs === "number" &&
+    Number.isFinite(defaults.conversationLaneDrainDelayMs);
   const hasSubMax =
     typeof defaults?.subagents?.maxConcurrent === "number" &&
     Number.isFinite(defaults.subagents.maxConcurrent);
-  if (hasMax && hasConvMax && hasSubMax) {
+  if (hasMax && hasConvMax && hasDrainDelay && hasSubMax) {
     return cfg;
   }
 
@@ -343,6 +347,10 @@ export function applyAgentDefaults(cfg: OpenClawConfig): OpenClawConfig {
   }
   if (!hasConvMax) {
     nextDefaults.maxConcurrentPerConversation = DEFAULT_AGENT_MAX_CONCURRENT_PER_CONVERSATION;
+    mutated = true;
+  }
+  if (!hasDrainDelay) {
+    nextDefaults.conversationLaneDrainDelayMs = DEFAULT_CONVERSATION_LANE_DRAIN_DELAY_MS;
     mutated = true;
   }
 

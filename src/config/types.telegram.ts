@@ -96,6 +96,8 @@ export type TelegramAccountConfig = {
   groupPolicy?: GroupPolicy;
   /** Max group messages to keep as history context (0 disables). */
   historyLimit?: number;
+  /** Delay (ms) between consecutive task starts in conversation lanes (overrides global default). */
+  conversationLaneDrainDelayMs?: number;
   /** Max DM turns to keep as history context. */
   dmHistoryLimit?: number;
   /** Per-DM config overrides keyed by user ID. */
@@ -189,6 +191,8 @@ export type TelegramTopicConfig = {
 
 export type TelegramGroupConfig = {
   requireMention?: boolean;
+  /** Delay (ms) between consecutive task starts in this group's conversation lane. */
+  conversationLaneDrainDelayMs?: number;
   /** Per-group override for group message policy (open|disabled|allowlist). */
   groupPolicy?: GroupPolicy;
   /** Per-group max concurrent conversation runs (1–10). */

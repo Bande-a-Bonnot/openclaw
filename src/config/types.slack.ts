@@ -33,6 +33,8 @@ export type SlackChannelConfig = {
   allow?: boolean;
   /** Require mentioning the bot to trigger replies. */
   requireMention?: boolean;
+  /** Delay (ms) between consecutive task starts in this channel's conversation lane. */
+  conversationLaneDrainDelayMs?: number;
   /** Optional tool policy overrides for this channel. */
   tools?: GroupToolPolicyConfig;
   toolsBySender?: GroupToolPolicyBySenderConfig;
@@ -125,6 +127,8 @@ export type SlackAccountConfig = {
   groupPolicy?: GroupPolicy;
   /** Max channel messages to keep as history context (0 disables). */
   historyLimit?: number;
+  /** Delay (ms) between consecutive task starts in conversation lanes (overrides global default). */
+  conversationLaneDrainDelayMs?: number;
   /** Max DM turns to keep as history context. */
   dmHistoryLimit?: number;
   /** Per-DM config overrides keyed by user ID. */

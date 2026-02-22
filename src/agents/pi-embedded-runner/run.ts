@@ -1,12 +1,19 @@
 import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import type { ThinkLevel } from "../../auto-reply/thinking.js";
-import { resolveMaxConcurrentPerConversation } from "../../config/agent-limits.js";
+import {
+  resolveConversationLaneDrainDelay,
+  resolveMaxConcurrentPerConversation,
+} from "../../config/agent-limits.js";
 import { resolveAgentModelFallbackValues } from "../../config/model-input.js";
 import { generateSecureToken } from "../../infra/secure-random.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import type { PluginHookBeforeAgentStartResult } from "../../plugins/types.js";
-import { enqueueCommandInLane, setCommandLaneConcurrency } from "../../process/command-queue.js";
+import {
+  enqueueCommandInLane,
+  setCommandLaneConcurrency,
+  setCommandLaneDrainDelay,
+} from "../../process/command-queue.js";
 import { isMarkdownCapableMessageChannel } from "../../utils/message-channel.js";
 import { resolveOpenClawAgentDir } from "../agent-paths.js";
 import {
@@ -204,6 +211,15 @@ export async function runEmbeddedPiAgent(
     setCommandLaneConcurrency(
       convLane,
       resolveMaxConcurrentPerConversation({
+        cfg: params.config,
+        channel: params.messageChannel,
+        groupSpace: params.groupSpace,
+        peerId: params.messageTo,
+      }),
+    );
+    setCommandLaneDrainDelay(
+      convLane,
+      resolveConversationLaneDrainDelay({
         cfg: params.config,
         channel: params.messageChannel,
         groupSpace: params.groupSpace,
