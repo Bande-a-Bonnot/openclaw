@@ -1,19 +1,11 @@
 import { randomBytes } from "node:crypto";
 import fs from "node:fs/promises";
 import type { ThinkLevel } from "../../auto-reply/thinking.js";
-import {
-  resolveConversationLaneDrainDelay,
-  resolveMaxConcurrentPerConversation,
-} from "../../config/agent-limits.js";
 import { resolveAgentModelFallbackValues } from "../../config/model-input.js";
 import { generateSecureToken } from "../../infra/secure-random.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
 import type { PluginHookBeforeAgentStartResult } from "../../plugins/types.js";
-import {
-  enqueueCommandInLane,
-  setCommandLaneConcurrency,
-  setCommandLaneDrainDelay,
-} from "../../process/command-queue.js";
+import { enqueueCommandInLane } from "../../process/command-queue.js";
 import { isMarkdownCapableMessageChannel } from "../../utils/message-channel.js";
 import { resolveOpenClawAgentDir } from "../agent-paths.js";
 import {
@@ -59,7 +51,7 @@ import {
 import { derivePromptTokens, normalizeUsage, type UsageLike } from "../usage.js";
 import { redactRunIdentifier, resolveRunWorkspaceDir } from "../workspace-run.js";
 import { compactEmbeddedPiSessionDirect } from "./compact.js";
-import { resolveConversationLane, resolveGlobalLane, resolveSessionLane } from "./lanes.js";
+import { resolveGlobalLane, resolveSessionLane, setupConversationLane } from "./lanes.js";
 import { log } from "./logger.js";
 import { resolveModel } from "./model.js";
 import { runEmbeddedAttempt } from "./run/attempt.js";
@@ -202,38 +194,17 @@ export async function runEmbeddedPiAgent(
 ): Promise<EmbeddedPiRunResult> {
   const sessionLane = resolveSessionLane(params.sessionKey?.trim() || params.sessionId);
   const globalLane = resolveGlobalLane(params.lane);
-  const convLane = resolveConversationLane({
+  const enqueueConv = setupConversationLane({
+    cfg: params.config,
     channel: params.messageChannel,
     accountId: params.agentAccountId,
     peerId: params.messageTo,
+    groupSpace: params.groupSpace,
   });
-  if (convLane) {
-    setCommandLaneConcurrency(
-      convLane,
-      resolveMaxConcurrentPerConversation({
-        cfg: params.config,
-        channel: params.messageChannel,
-        groupSpace: params.groupSpace,
-        peerId: params.messageTo,
-      }),
-    );
-    setCommandLaneDrainDelay(
-      convLane,
-      resolveConversationLaneDrainDelay({
-        cfg: params.config,
-        channel: params.messageChannel,
-        groupSpace: params.groupSpace,
-        peerId: params.messageTo,
-      }),
-    );
-  }
   const enqueueGlobal =
     params.enqueue ?? ((task, opts) => enqueueCommandInLane(globalLane, task, opts));
   const enqueueSession =
     params.enqueue ?? ((task, opts) => enqueueCommandInLane(sessionLane, task, opts));
-  const enqueueConv = convLane
-    ? <T>(task: () => Promise<T>) => enqueueCommandInLane(convLane, task)
-    : <T>(task: () => Promise<T>) => task();
   const channelHint = params.messageChannel ?? params.messageProvider;
   const resolvedToolResultFormat =
     params.toolResultFormat ??

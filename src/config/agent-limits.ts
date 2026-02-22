@@ -63,37 +63,51 @@ function asNonNegativeInt(value: unknown): number | undefined {
   return Math.floor(value);
 }
 
+// ---------------------------------------------------------------------------
+// Generic per-channel config cascade resolver
+// ---------------------------------------------------------------------------
+
+type CascadeParams = {
+  cfg?: OpenClawConfig;
+  channel?: string;
+  groupSpace?: string | null;
+  peerId?: string;
+};
+
 /**
- * Resolve `maxConcurrentPerConversation` using the established channel config cascade:
+ * Resolve a numeric config field using the established channel config cascade:
  *
  *   Discord:  channel → guild → provider → global
  *   Telegram: group → provider → global
  *   Slack:    channel → provider → global
  *   Others:   provider → global
  */
-export function resolveMaxConcurrentPerConversation(params: {
-  cfg?: OpenClawConfig;
-  channel?: string;
-  groupSpace?: string | null;
-  peerId?: string;
-}): number {
-  const globalDefault = resolveAgentMaxConcurrentPerConversation(params.cfg);
+function resolvePerChannelValue(
+  params: CascadeParams,
+  field: string,
+  validate: (v: unknown) => number | undefined,
+  globalDefault: number,
+): number {
   const channelKey = params.channel?.toLowerCase();
   if (!channelKey) {
     return globalDefault;
   }
+
+  // Safety: the `as` cast is unavoidable here because ChannelsConfig uses
+  // `[key: string]: any` for extension providers, and the typed providers
+  // (discord, telegram, slack) pass through nested objects whose shape varies.
+  // The `validate` callback performs full runtime type-checking (typeof + isFinite
+  // + bounds), so an incorrect field type will return `undefined` and fall through
+  // to the next cascade level rather than producing a bad value.
+  const get = (obj: unknown): number | undefined =>
+    validate((obj as Record<string, unknown> | undefined)?.[field]);
 
   if (channelKey === "discord") {
     const config = params.cfg?.channels?.discord;
     const guild = params.groupSpace ? config?.guilds?.[params.groupSpace] : undefined;
     const channelId = stripPeerPrefix(params.peerId);
     const channel = channelId ? guild?.channels?.[channelId] : undefined;
-    return (
-      asPositiveInt(channel?.maxConcurrentPerConversation) ??
-      asPositiveInt(guild?.maxConcurrentPerConversation) ??
-      asPositiveInt(config?.maxConcurrentPerConversation) ??
-      globalDefault
-    );
+    return get(channel) ?? get(guild) ?? get(config) ?? globalDefault;
   }
 
   if (channelKey === "telegram") {
@@ -101,32 +115,27 @@ export function resolveMaxConcurrentPerConversation(params: {
     // groupSpace is NOT populated for Telegram; extract group ID from peerId
     const groupId = stripPeerPrefix(params.groupSpace ?? params.peerId);
     const group = groupId ? config?.groups?.[groupId] : undefined;
-    return (
-      asPositiveInt(group?.maxConcurrentPerConversation) ??
-      asPositiveInt(config?.maxConcurrentPerConversation) ??
-      globalDefault
-    );
+    return get(group) ?? get(config) ?? globalDefault;
   }
 
   if (channelKey === "slack") {
     const config = params.cfg?.channels?.slack;
     const channelId = stripPeerPrefix(params.peerId);
     const channel = channelId ? config?.channels?.[channelId] : undefined;
-    return (
-      asPositiveInt(channel?.maxConcurrentPerConversation) ??
-      asPositiveInt(config?.maxConcurrentPerConversation) ??
-      globalDefault
-    );
+    return get(channel) ?? get(config) ?? globalDefault;
   }
 
-  // Flat providers: provider-level only via dynamic key.
-  // Safety: the `as` cast is needed because ChannelsConfig uses `[key: string]: any`
-  // for extension providers. `asPositiveInt` performs full runtime validation so an
-  // incorrect field type falls through to `globalDefault` rather than producing a bad value.
-  const providerConfig = params.cfg?.channels?.[channelKey] as
-    | { maxConcurrentPerConversation?: number }
-    | undefined;
-  return asPositiveInt(providerConfig?.maxConcurrentPerConversation) ?? globalDefault;
+  // Flat providers: provider-level only via dynamic key
+  return get(params.cfg?.channels?.[channelKey]) ?? globalDefault;
+}
+
+export function resolveMaxConcurrentPerConversation(params: CascadeParams): number {
+  return resolvePerChannelValue(
+    params,
+    "maxConcurrentPerConversation",
+    asPositiveInt,
+    resolveAgentMaxConcurrentPerConversation(params.cfg),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -141,64 +150,11 @@ function resolveAgentConversationLaneDrainDelay(cfg?: OpenClawConfig): number {
   return DEFAULT_CONVERSATION_LANE_DRAIN_DELAY_MS;
 }
 
-/**
- * Resolve `conversationLaneDrainDelayMs` using the established channel config cascade:
- *
- *   Discord:  channel → guild → provider → global
- *   Telegram: group → provider → global
- *   Slack:    channel → provider → global
- *   Others:   provider → global
- */
-export function resolveConversationLaneDrainDelay(params: {
-  cfg?: OpenClawConfig;
-  channel?: string;
-  groupSpace?: string | null;
-  peerId?: string;
-}): number {
-  const globalDefault = resolveAgentConversationLaneDrainDelay(params.cfg);
-  const channelKey = params.channel?.toLowerCase();
-  if (!channelKey) {
-    return globalDefault;
-  }
-
-  if (channelKey === "discord") {
-    const config = params.cfg?.channels?.discord;
-    const guild = params.groupSpace ? config?.guilds?.[params.groupSpace] : undefined;
-    const channelId = stripPeerPrefix(params.peerId);
-    const channel = channelId ? guild?.channels?.[channelId] : undefined;
-    return (
-      asNonNegativeInt(channel?.conversationLaneDrainDelayMs) ??
-      asNonNegativeInt(guild?.conversationLaneDrainDelayMs) ??
-      asNonNegativeInt(config?.conversationLaneDrainDelayMs) ??
-      globalDefault
-    );
-  }
-
-  if (channelKey === "telegram") {
-    const config = params.cfg?.channels?.telegram;
-    const groupId = stripPeerPrefix(params.groupSpace ?? params.peerId);
-    const group = groupId ? config?.groups?.[groupId] : undefined;
-    return (
-      asNonNegativeInt(group?.conversationLaneDrainDelayMs) ??
-      asNonNegativeInt(config?.conversationLaneDrainDelayMs) ??
-      globalDefault
-    );
-  }
-
-  if (channelKey === "slack") {
-    const config = params.cfg?.channels?.slack;
-    const channelId = stripPeerPrefix(params.peerId);
-    const channel = channelId ? config?.channels?.[channelId] : undefined;
-    return (
-      asNonNegativeInt(channel?.conversationLaneDrainDelayMs) ??
-      asNonNegativeInt(config?.conversationLaneDrainDelayMs) ??
-      globalDefault
-    );
-  }
-
-  // Flat providers: provider-level only via dynamic key
-  const providerConfig = params.cfg?.channels?.[channelKey] as
-    | { conversationLaneDrainDelayMs?: number }
-    | undefined;
-  return asNonNegativeInt(providerConfig?.conversationLaneDrainDelayMs) ?? globalDefault;
+export function resolveConversationLaneDrainDelay(params: CascadeParams): number {
+  return resolvePerChannelValue(
+    params,
+    "conversationLaneDrainDelayMs",
+    asNonNegativeInt,
+    resolveAgentConversationLaneDrainDelay(params.cfg),
+  );
 }

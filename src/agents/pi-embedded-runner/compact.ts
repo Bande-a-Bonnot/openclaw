@@ -10,21 +10,12 @@ import {
 } from "@mariozechner/pi-coding-agent";
 import { resolveHeartbeatPrompt } from "../../auto-reply/heartbeat.js";
 import type { ReasoningLevel, ThinkLevel } from "../../auto-reply/thinking.js";
-import {
-  resolveConversationLaneDrainDelay,
-  resolveMaxConcurrentPerConversation,
-} from "../../config/agent-limits.js";
 import { resolveChannelCapabilities } from "../../config/channel-capabilities.js";
 import type { OpenClawConfig } from "../../config/config.js";
 import { getMachineDisplayName } from "../../infra/machine-name.js";
 import { generateSecureToken } from "../../infra/secure-random.js";
 import { getGlobalHookRunner } from "../../plugins/hook-runner-global.js";
-import {
-  type enqueueCommand,
-  enqueueCommandInLane,
-  setCommandLaneConcurrency,
-  setCommandLaneDrainDelay,
-} from "../../process/command-queue.js";
+import { type enqueueCommand, enqueueCommandInLane } from "../../process/command-queue.js";
 import { isCronSessionKey, isSubagentSessionKey } from "../../routing/session-key.js";
 import { resolveSignalReactionLevel } from "../../signal/reaction-level.js";
 import { resolveTelegramInlineButtonsScope } from "../../telegram/inline-buttons.js";
@@ -81,9 +72,9 @@ import {
 import { getDmHistoryLimitFromSessionKey, limitHistoryTurns } from "./history.js";
 import {
   parseConversationPartsFromSessionKey,
-  resolveConversationLane,
   resolveGlobalLane,
   resolveSessionLane,
+  setupConversationLane,
 } from "./lanes.js";
 import { log } from "./logger.js";
 import { buildModelAliasLines, resolveModel } from "./model.js";
@@ -768,36 +759,15 @@ export async function compactEmbeddedPiSession(
   const sessionLane = resolveSessionLane(params.sessionKey?.trim() || params.sessionId);
   const globalLane = resolveGlobalLane(params.lane);
   const convParts = parseConversationPartsFromSessionKey(params.sessionKey);
-  const convLane = resolveConversationLane({
+  const enqueueConv = setupConversationLane({
+    cfg: params.config,
     channel: params.messageChannel ?? convParts.channel,
     accountId: params.agentAccountId,
     peerId: convParts.peerId,
+    groupSpace: params.groupSpace,
   });
-  if (convLane) {
-    setCommandLaneConcurrency(
-      convLane,
-      resolveMaxConcurrentPerConversation({
-        cfg: params.config,
-        channel: params.messageChannel ?? convParts.channel,
-        groupSpace: params.groupSpace,
-        peerId: convParts.peerId,
-      }),
-    );
-    setCommandLaneDrainDelay(
-      convLane,
-      resolveConversationLaneDrainDelay({
-        cfg: params.config,
-        channel: params.messageChannel ?? convParts.channel,
-        groupSpace: params.groupSpace,
-        peerId: convParts.peerId,
-      }),
-    );
-  }
   const enqueueGlobal =
     params.enqueue ?? ((task, opts) => enqueueCommandInLane(globalLane, task, opts));
-  const enqueueConv = convLane
-    ? <T>(task: () => Promise<T>) => enqueueCommandInLane(convLane, task)
-    : <T>(task: () => Promise<T>) => task();
   return enqueueCommandInLane(sessionLane, () =>
     enqueueConv(() => enqueueGlobal(async () => compactEmbeddedPiSessionDirect(params))),
   );

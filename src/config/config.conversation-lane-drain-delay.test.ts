@@ -16,7 +16,7 @@ describe("resolveConversationLaneDrainDelay (per-channel cascade)", () => {
     expect(resolveConversationLaneDrainDelay({})).toBe(globalDefault);
   });
 
-  it("returns global default when channel is missing", () => {
+  it("returns agent-level value when channel param is missing", () => {
     expect(
       resolveConversationLaneDrainDelay({
         cfg: { agents: { defaults: { conversationLaneDrainDelayMs: 500 } } },
