@@ -169,6 +169,11 @@ vi.mock("./lanes.js", () => ({
   resolveSessionLane: vi.fn(() => "session-lane"),
   resolveGlobalLane: vi.fn(() => "global-lane"),
   resolveConversationLane: vi.fn(() => null),
+  setupConversationLane: vi.fn(
+    () =>
+      <T>(task: () => Promise<T>) =>
+        task(),
+  ),
 }));
 
 vi.mock("./logger.js", () => ({
