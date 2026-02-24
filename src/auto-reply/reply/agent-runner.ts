@@ -50,7 +50,12 @@ import {
   readSessionMessages,
 } from "./post-compaction-audit.js";
 import { readPostCompactionContext } from "./post-compaction-context.js";
-import { enqueueFollowupRun, type FollowupRun, type QueueSettings } from "./queue.js";
+import {
+  enqueueFollowupRun,
+  scheduleFollowupDrain,
+  type FollowupRun,
+  type QueueSettings,
+} from "./queue.js";
 import { createReplyToModeFilterForChannel, resolveReplyToMode } from "./reply-threading.js";
 import { incrementRunCompactionCount, persistRunSessionUsage } from "./session-run-accounting.js";
 import { createTypingSignaler } from "./typing-mode.js";
@@ -134,7 +139,7 @@ export async function runReplyAgent(params: {
     resolvedQueue,
     shouldSteer,
     shouldFollowup,
-    isActive,
+    isActive: _isActive,
     isStreaming,
     opts,
     typing,
@@ -235,8 +240,28 @@ export async function runReplyAgent(params: {
     }
   }
 
-  if (isActive && (shouldFollowup || resolvedQueue.mode === "steer")) {
+  // Mailbox actor: create the followup runner early so it's available for
+  // both the enqueue path and the direct-run path.
+  const runFollowupTurn = createFollowupRunner({
+    opts,
+    typing,
+    typingMode,
+    sessionEntry: activeSessionEntry,
+    sessionStore: activeSessionStore,
+    sessionKey,
+    storePath,
+    defaultModel,
+    agentCfgContextTokens,
+  });
+
+  // Mailbox actor pattern: messages ALWAYS enter the followup queue first,
+  // regardless of whether a run is currently active. This eliminates the
+  // idle race that causes unbounded backlog growth in multi-agent conversations.
+  // The existing `draining` flag in the queue state ensures at most one drain
+  // loop runs at a time — no separate `hasToken` needed.
+  if (shouldFollowup || resolvedQueue.mode === "steer") {
     enqueueFollowupRun(queueKey, followupRun, resolvedQueue);
+    scheduleFollowupDrain(queueKey, runFollowupTurn);
     await touchActiveSessionEntry();
     typing.cleanup();
     return undefined;
@@ -257,18 +282,6 @@ export async function runReplyAgent(params: {
     sessionKey,
     storePath,
     isHeartbeat,
-  });
-
-  const runFollowupTurn = createFollowupRunner({
-    opts,
-    typing,
-    typingMode,
-    sessionEntry: activeSessionEntry,
-    sessionStore: activeSessionStore,
-    sessionKey,
-    storePath,
-    defaultModel,
-    agentCfgContextTokens,
   });
 
   let responseUsageLine: string | undefined;
