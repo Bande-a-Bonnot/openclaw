@@ -214,14 +214,19 @@ export function simulateCurrentSystem(config: SimConfig): SimResult {
   }
 
   function tryDrainPendingRuns(time: number): void {
-    while (state.activeRuns < state.concurrencyCap && state.pendingRuns.length > 0) {
-      const next = state.pendingRuns.shift()!;
-      const agent = state.agents.get(next.agent);
+    // Skip busy/cooldown agents instead of blocking on the first one.
+    // The real outer scheduler doesn't use strict FIFO — it picks the
+    // next available agent, so head-of-line blocking is unrealistic.
+    let i = 0;
+    while (state.activeRuns < state.concurrencyCap && i < state.pendingRuns.length) {
+      const entry = state.pendingRuns[i];
+      const agent = state.agents.get(entry.agent);
       if (!agent || agent.busy || agent.inCooldown) {
-        state.pendingRuns.unshift(next);
-        break;
+        i++;
+        continue;
       }
-      startRun(agent, time, next.enqueuedAt);
+      state.pendingRuns.splice(i, 1);
+      startRun(agent, time, entry.enqueuedAt);
     }
   }
 
