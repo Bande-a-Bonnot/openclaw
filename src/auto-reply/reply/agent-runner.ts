@@ -108,7 +108,6 @@ export async function runReplyAgent(params: {
   resolvedQueue: QueueSettings;
   shouldSteer: boolean;
   shouldFollowup: boolean;
-  isActive: boolean;
   isStreaming: boolean;
   opts?: GetReplyOptions;
   typing: TypingController;
@@ -139,7 +138,6 @@ export async function runReplyAgent(params: {
     resolvedQueue,
     shouldSteer,
     shouldFollowup,
-    isActive: _isActive,
     isStreaming,
     opts,
     typing,
@@ -241,7 +239,9 @@ export async function runReplyAgent(params: {
   }
 
   // Mailbox actor: create the followup runner early so it's available for
-  // both the enqueue path and the direct-run path.
+  // both the enqueue path and the direct-run path. On the direct-run path,
+  // activeSessionEntry may become stale after runMemoryFlushIfNeeded, but
+  // sessionEntry is only a tertiary fallback for contextTokens resolution.
   const runFollowupTurn = createFollowupRunner({
     opts,
     typing,
@@ -261,6 +261,8 @@ export async function runReplyAgent(params: {
   // loop runs at a time — no separate `hasToken` needed.
   if (shouldFollowup || resolvedQueue.mode === "steer") {
     enqueueFollowupRun(queueKey, followupRun, resolvedQueue);
+    // Safe even if a drain is already running — beginQueueDrain short-circuits
+    // when queue.draining is true.
     scheduleFollowupDrain(queueKey, runFollowupTurn);
     await touchActiveSessionEntry();
     typing.cleanup();

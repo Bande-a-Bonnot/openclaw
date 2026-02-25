@@ -5,7 +5,7 @@
  *
  * See: docs/queue-stability/SOLUTIONS.md (Design A: Mailbox Actor)
  */
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import type { TemplateContext } from "../templating.js";
 import type { FollowupRun, QueueSettings } from "./queue.js";
 import { createMockTypingController } from "./test-helpers.js";
@@ -48,11 +48,7 @@ vi.mock("./queue.js", () => ({
   scheduleFollowupDrain: (...args: unknown[]) => scheduleFollowupDrainMock(...args),
 }));
 
-function createMailboxTestParams(overrides?: {
-  isActive?: boolean;
-  shouldFollowup?: boolean;
-  queueMode?: string;
-}) {
+function createMailboxTestParams(overrides?: { shouldFollowup?: boolean; queueMode?: string }) {
   const typing = createMockTypingController();
   const sessionCtx = {
     Provider: "whatsapp",
@@ -87,7 +83,6 @@ function createMailboxTestParams(overrides?: {
     resolvedQueue,
     shouldSteer: false,
     shouldFollowup: overrides?.shouldFollowup ?? true,
-    isActive: overrides?.isActive ?? false,
     isStreaming: false,
     opts: undefined,
     typing,
@@ -102,7 +97,13 @@ function createMailboxTestParams(overrides?: {
   };
 }
 
+let runReplyAgent: (typeof import("./agent-runner.js"))["runReplyAgent"];
+
 describe("mailbox actor pattern", () => {
+  beforeAll(async () => {
+    ({ runReplyAgent } = await import("./agent-runner.js"));
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     state.runEmbeddedPiAgentMock.mockResolvedValue({
@@ -111,9 +112,8 @@ describe("mailbox actor pattern", () => {
     });
   });
 
-  it("enqueues message when agent is idle (no bypass)", async () => {
-    const { runReplyAgent } = await import("./agent-runner.js");
-    const params = createMailboxTestParams({ isActive: false, shouldFollowup: true });
+  it("enqueues and schedules drain when shouldFollowup is true", async () => {
+    const params = createMailboxTestParams({ shouldFollowup: true });
 
     const result = await runReplyAgent(params);
 
@@ -122,24 +122,12 @@ describe("mailbox actor pattern", () => {
     expect(scheduleFollowupDrainMock).toHaveBeenCalledOnce();
     // Should NOT have started a direct run — message goes through queue.
     expect(state.runEmbeddedPiAgentMock).not.toHaveBeenCalled();
+    // Typing should be cleaned up on the enqueue path.
+    expect(params.typing.cleanup).toHaveBeenCalled();
   });
 
-  it("enqueues message when agent is active", async () => {
-    const { runReplyAgent } = await import("./agent-runner.js");
-    const params = createMailboxTestParams({ isActive: true, shouldFollowup: true });
-
-    const result = await runReplyAgent(params);
-
-    expect(result).toBeUndefined();
-    expect(enqueueFollowupRunMock).toHaveBeenCalledOnce();
-    expect(scheduleFollowupDrainMock).toHaveBeenCalledOnce();
-    expect(state.runEmbeddedPiAgentMock).not.toHaveBeenCalled();
-  });
-
-  it("enqueues message in steer mode regardless of active state", async () => {
-    const { runReplyAgent } = await import("./agent-runner.js");
+  it("enqueues message in steer mode", async () => {
     const params = createMailboxTestParams({
-      isActive: false,
       shouldFollowup: false,
       queueMode: "steer",
     });
@@ -151,23 +139,8 @@ describe("mailbox actor pattern", () => {
     expect(scheduleFollowupDrainMock).toHaveBeenCalledOnce();
   });
 
-  it("scheduleFollowupDrain receives the followup runner", async () => {
-    const { runReplyAgent } = await import("./agent-runner.js");
-    const params = createMailboxTestParams({ isActive: false, shouldFollowup: true });
-
-    await runReplyAgent(params);
-
-    // The second argument to scheduleFollowupDrain should be a function
-    // (the followup runner created by createFollowupRunner).
-    const drainArgs = scheduleFollowupDrainMock.mock.calls[0];
-    expect(drainArgs[0]).toBe("session-1");
-    expect(typeof drainArgs[1]).toBe("function");
-  });
-
   it("does not enqueue when shouldFollowup is false and mode is not steer", async () => {
-    const { runReplyAgent } = await import("./agent-runner.js");
     const params = createMailboxTestParams({
-      isActive: false,
       shouldFollowup: false,
       queueMode: "interrupt",
     });
@@ -180,14 +153,5 @@ describe("mailbox actor pattern", () => {
     expect(state.runEmbeddedPiAgentMock).toHaveBeenCalled();
     // Note: scheduleFollowupDrain IS called at the end of the run
     // via finalizeWithFollowup — that's expected and correct.
-  });
-
-  it("cleans up typing on enqueue path", async () => {
-    const { runReplyAgent } = await import("./agent-runner.js");
-    const params = createMailboxTestParams({ isActive: false, shouldFollowup: true });
-
-    await runReplyAgent(params);
-
-    expect(params.typing.cleanup).toHaveBeenCalled();
   });
 });

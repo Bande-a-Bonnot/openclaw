@@ -147,7 +147,7 @@ describe("runReplyAgent onAgentRunStart", () => {
       resolvedQueue,
       shouldSteer: false,
       shouldFollowup: false,
-      isActive: false,
+
       isStreaming: false,
       opts: params?.opts,
       typing,
@@ -270,7 +270,7 @@ describe("runReplyAgent authProfileId fallback scoping", () => {
       resolvedQueue,
       shouldSteer: false,
       shouldFollowup: false,
-      isActive: false,
+
       isStreaming: false,
       typing,
       sessionCtx,
@@ -412,7 +412,7 @@ describe("runReplyAgent auto-compaction token update", () => {
       resolvedQueue,
       shouldSteer: false,
       shouldFollowup: false,
-      isActive: false,
+
       isStreaming: false,
       typing,
       sessionCtx,
@@ -473,7 +473,7 @@ describe("runReplyAgent auto-compaction token update", () => {
       resolvedQueue,
       shouldSteer: false,
       shouldFollowup: false,
-      isActive: false,
+
       isStreaming: false,
       typing,
       sessionCtx,
@@ -562,7 +562,7 @@ describe("runReplyAgent block streaming", () => {
       resolvedQueue,
       shouldSteer: false,
       shouldFollowup: false,
-      isActive: false,
+
       isStreaming: false,
       opts: { onBlockReply },
       typing,
@@ -664,7 +664,7 @@ describe("runReplyAgent block streaming", () => {
       resolvedQueue,
       shouldSteer: false,
       shouldFollowup: false,
-      isActive: false,
+
       isStreaming: false,
       opts: { onBlockReply, blockReplyTimeoutMs: 1 },
       typing,
@@ -735,7 +735,7 @@ describe("runReplyAgent claude-cli routing", () => {
       resolvedQueue,
       shouldSteer: false,
       shouldFollowup: false,
-      isActive: false,
+
       isStreaming: false,
       typing,
       sessionCtx,
@@ -834,7 +834,7 @@ describe("runReplyAgent messaging tool suppression", () => {
       resolvedQueue,
       shouldSteer: false,
       shouldFollowup: false,
-      isActive: false,
+
       isStreaming: false,
       typing,
       sessionCtx,
@@ -1057,7 +1057,7 @@ describe("runReplyAgent reminder commitment guard", () => {
       resolvedQueue,
       shouldSteer: false,
       shouldFollowup: false,
-      isActive: false,
+
       isStreaming: false,
       typing,
       sessionCtx,
@@ -1155,7 +1155,7 @@ describe("runReplyAgent fallback reasoning tags", () => {
       resolvedQueue,
       shouldSteer: false,
       shouldFollowup: false,
-      isActive: false,
+
       isStreaming: false,
       typing,
       sessionCtx,
@@ -1276,7 +1276,7 @@ describe("runReplyAgent response usage footer", () => {
       resolvedQueue,
       shouldSteer: false,
       shouldFollowup: false,
-      isActive: false,
+
       isStreaming: false,
       typing,
       sessionCtx,
@@ -1385,7 +1385,7 @@ describe("runReplyAgent transient HTTP retry", () => {
       resolvedQueue,
       shouldSteer: false,
       shouldFollowup: false,
-      isActive: false,
+
       isStreaming: false,
       typing,
       sessionCtx,

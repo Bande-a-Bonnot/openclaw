@@ -148,7 +148,7 @@ function createMinimalRun(params?: {
         resolvedQueue,
         shouldSteer: false,
         shouldFollowup: false,
-        isActive: false,
+
         isStreaming: false,
         opts,
         typing,
@@ -255,7 +255,6 @@ async function runReplyAgentWithBase(params: {
     resolvedQueue,
     shouldSteer: false,
     shouldFollowup: false,
-    isActive: false,
     isStreaming: false,
     typing,
     sessionCtx,
