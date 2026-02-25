@@ -1048,6 +1048,38 @@ describe("followup queue collect routing", () => {
   });
 });
 
+describe("followup queue first-drain-pass debounce skip", () => {
+  it("processes first message without waiting for debounce", async () => {
+    const key = `test-first-drain-no-debounce-${Date.now()}`;
+    const calls: FollowupRun[] = [];
+    const done = createDeferred<void>();
+    const runFollowup = async (run: FollowupRun) => {
+      calls.push(run);
+      done.resolve();
+    };
+    // Use a large debounce to make the test fail if debounce fires on first pass.
+    const settings: QueueSettings = {
+      mode: "interrupt",
+      debounceMs: 5000,
+      cap: 50,
+      dropPolicy: "summarize",
+    };
+
+    enqueueFollowupRun(key, createRun({ prompt: "first-message" }), settings);
+    scheduleFollowupDrain(key, runFollowup);
+
+    // If debounce were applied on the first pass, the promise would hang for
+    // 5 seconds and the test would time out. Resolving quickly proves the skip.
+    const result = await Promise.race([
+      done.promise.then(() => "resolved"),
+      new Promise<string>((resolve) => setTimeout(() => resolve("timeout"), 2000)),
+    ]);
+    expect(result).toBe("resolved");
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.prompt).toBe("first-message");
+  });
+});
+
 const emptyCfg = {} as OpenClawConfig;
 
 describe("createReplyDispatcher", () => {

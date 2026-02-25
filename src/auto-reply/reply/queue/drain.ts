@@ -24,8 +24,15 @@ export function scheduleFollowupDrain(
   void (async () => {
     try {
       const collectState = { forceIndividualCollect: false };
+      let isFirstDrainPass = true;
       while (queue.items.length > 0 || queue.droppedCount > 0) {
-        await waitForQueueDebounce(queue);
+        // Skip debounce on the first iteration of a fresh drain — the first
+        // message to an idle agent has nothing to coalesce with, so the wait
+        // just adds dead latency (~DEFAULT_QUEUE_DEBOUNCE_MS).
+        if (!isFirstDrainPass) {
+          await waitForQueueDebounce(queue);
+        }
+        isFirstDrainPass = false;
         if (queue.mode === "collect") {
           // Once the batch is mixed, never collect again within this drain.
           // Prevents “collect after shift” collapsing different targets.
